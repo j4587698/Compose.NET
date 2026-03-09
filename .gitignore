@@ -1,0 +1,19 @@
+# Build outputs
+**/bin/
+**/obj/
+artifacts/
+
+# IDE/tooling
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test artifacts
+TestResults/
+*.trx
+
+# Internal workflow cache
+.spec-workflow/

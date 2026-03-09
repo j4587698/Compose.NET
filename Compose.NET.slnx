@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Compose.NET/Compose.NET.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/Compose.NET.Tests/Compose.NET.Tests.csproj" />
+  </Folder>
+</Solution>

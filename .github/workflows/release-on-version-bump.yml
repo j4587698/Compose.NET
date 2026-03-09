@@ -1,0 +1,123 @@
+name: Release On Version Bump
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Compare project version with latest tag
+        id: version_check
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          csproj = Path("src/Compose.NET/Compose.NET.csproj")
+          content = csproj.read_text(encoding="utf-8")
+          match = re.search(r"<Version>\s*([^<\s]+)\s*</Version>", content)
+          if not match:
+              raise SystemExit("Could not find <Version> in src/Compose.NET/Compose.NET.csproj")
+
+          version = match.group(1).strip()
+
+          def parse_semver(value: str):
+              m = re.fullmatch(r"v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", value.strip())
+              if not m:
+                  return None
+              return tuple(int(x) for x in m.groups())
+
+          current = parse_semver(version)
+          if current is None:
+              raise SystemExit(
+                  f"Project version '{version}' is not supported by this workflow. "
+                  "Use stable SemVer in x.y.z format."
+              )
+
+          tags = subprocess.check_output(["git", "tag", "--list"], text=True).splitlines()
+          latest_tuple = (0, 0, 0)
+          latest_tag = ""
+          for tag in tags:
+              parsed = parse_semver(tag)
+              if parsed is not None and parsed > latest_tuple:
+                  latest_tuple = parsed
+                  latest_tag = tag
+
+          target_tag = f"v{version}"
+          should_release = current > latest_tuple and target_tag not in tags
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"version={version}\n")
+              output.write(f"tag={target_tag}\n")
+              output.write(f"latest_tag={latest_tag or 'none'}\n")
+              output.write(f"latest_version={latest_tuple[0]}.{latest_tuple[1]}.{latest_tuple[2]}\n")
+              output.write(f"should_release={'true' if should_release else 'false'}\n")
+          PY
+
+      - name: Show release decision
+        run: |
+          echo "Project version : ${{ steps.version_check.outputs.version }}"
+          echo "Latest tag      : ${{ steps.version_check.outputs.latest_tag }}"
+          echo "Latest version  : ${{ steps.version_check.outputs.latest_version }}"
+          echo "Should release  : ${{ steps.version_check.outputs.should_release }}"
+
+      - name: Build
+        if: steps.version_check.outputs.should_release == 'true'
+        run: dotnet build "Compose.NET.slnx" -c Release
+
+      - name: Test
+        if: steps.version_check.outputs.should_release == 'true'
+        run: dotnet test "Compose.NET.slnx" -c Release --no-build
+
+      - name: Pack
+        if: steps.version_check.outputs.should_release == 'true'
+        run: dotnet pack "src/Compose.NET/Compose.NET.csproj" -c Release -o artifacts --no-build
+
+      - name: Push to NuGet
+        if: steps.version_check.outputs.should_release == 'true'
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "NUGET_API_KEY is not configured."
+            exit 1
+          fi
+
+          dotnet nuget push "artifacts/*.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --skip-duplicate
+
+      - name: Create and push git tag
+        if: steps.version_check.outputs.should_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version_check.outputs.tag }}"
+          git push origin "${{ steps.version_check.outputs.tag }}"
+
+      - name: Skip release
+        if: steps.version_check.outputs.should_release != 'true'
+        run: echo "Version is not greater than latest tag. Skip publish and tag."
