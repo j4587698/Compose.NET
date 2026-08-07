@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 
@@ -27,7 +28,18 @@ namespace Compose.NET.Types;
 /// snake_case â†’ PascalCase conversion (e.g., <c>max_retries</c> â†’ <c>MaxRetries</c>).
 /// Nested dictionaries are recursively decoded into complex property types.
 /// </para>
+/// <para>
+/// This decoder relies on reflection and runtime-constructed generic types, so it
+/// is not compatible with ahead-of-time compilation or trimming for arbitrary
+/// target types. Callers must opt in via <see cref="Extensions.Decode{T}(string)"/>
+/// and <see cref="Extensions.TryDecode{T}(string, out T)"/>, which carry the
+/// corresponding annotations.
+/// </para>
 /// </summary>
+[RequiresUnreferencedCode(
+    "ExtensionDecoder uses reflection to map dictionary data to target types, which may not survive trimming.")]
+[RequiresDynamicCode(
+    "ExtensionDecoder constructs generic types at runtime, which is not supported with ahead-of-time compilation.")]
 internal static class ExtensionDecoder
 {
     /// <summary>

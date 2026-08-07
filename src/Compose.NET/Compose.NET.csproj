@@ -19,6 +19,10 @@
     <ProjectUrl>https://github.com/j4587698/Compose.NET</ProjectUrl>
     <Copyright>Copyright (c) 2026 jx</Copyright>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="YamlDotNet" Version="16.2.0" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
   <!-- netstandard2.1 polyfills -->

@@ -353,41 +353,7 @@ namespace Compose.NET.Loader
         /// </summary>
         private static object? ConvertScalarValue(YamlScalarNode node)
         {
-            var value = node.Value;
-
-            // Quoted strings are always strings
-            if (node.Style == YamlDotNet.Core.ScalarStyle.SingleQuoted ||
-                node.Style == YamlDotNet.Core.ScalarStyle.DoubleQuoted)
-            {
-                return value;
-            }
-
-            // Plain scalars â€” try typed parsing
-            if (value == null || value == "~" ||
-                string.Equals(value, "null", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            if (string.IsNullOrEmpty(value))
-                return null;
-
-            if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
-                return true;
-            if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            if (int.TryParse(value, NumberStyles.Integer,
-                    CultureInfo.InvariantCulture, out var intVal))
-                return intVal;
-
-            if (long.TryParse(value, NumberStyles.Integer,
-                    CultureInfo.InvariantCulture, out var longVal))
-                return longVal;
-
-            if (double.TryParse(value, NumberStyles.Float | NumberStyles.AllowExponent,
-                    CultureInfo.InvariantCulture, out var dblVal))
-                return dblVal;
-
-            return value;
+            return YamlParser.ConvertScalarValue(node);
         }
 
         #endregion
