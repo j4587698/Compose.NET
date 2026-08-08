@@ -13,11 +13,8 @@
 // limitations under the License.
 
 using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text;
 using Compose.NET.Types;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace Compose.NET.Serialization
 {
@@ -41,14 +38,7 @@ namespace Compose.NET.Serialization
             if (project == null) throw new ArgumentNullException(nameof(project));
 
             var dict = ProjectToDict(project);
-
-            var serializer = new SerializerBuilder()
-                .WithNamingConvention(UnderscoredNamingConvention.Instance)
-                .DisableAliases()
-                .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
-                .Build();
-
-            return serializer.Serialize(dict);
+            return DictTreeSerializer.ToYaml(dict);
         }
 
         /// <summary>
@@ -63,15 +53,7 @@ namespace Compose.NET.Serialization
             if (project == null) throw new ArgumentNullException(nameof(project));
 
             var dict = ProjectToDict(project);
-
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = indented,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            };
-
-            return JsonSerializer.Serialize(dict, options);
+            return DictTreeSerializer.ToJson(dict, indented);
         }
 
         #endregion

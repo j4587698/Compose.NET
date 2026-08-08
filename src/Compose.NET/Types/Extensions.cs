@@ -100,6 +100,10 @@ public class Extensions : IDictionary<string, object>, IEquatable<Extensions>
     /// <exception cref="InvalidOperationException">
     /// The value is not a dictionary-like object or cannot be decoded.
     /// </exception>
+    [RequiresUnreferencedCode(
+        "Decode uses reflection to map dictionary data to the target type, which may not survive trimming.")]
+    [RequiresDynamicCode(
+        "Decode constructs generic types at runtime, which is not supported with ahead-of-time compilation.")]
     public T Decode<T>(string name) where T : new()
     {
         if (!_inner.TryGetValue(name, out var value))
@@ -118,6 +122,10 @@ public class Extensions : IDictionary<string, object>, IEquatable<Extensions>
     /// <param name="name">The extension key.</param>
     /// <param name="value">When this method returns, contains the decoded value if successful; otherwise, the default value.</param>
     /// <returns><c>true</c> if the key was found and successfully decoded; otherwise, <c>false</c>.</returns>
+    [RequiresUnreferencedCode(
+        "TryDecode uses reflection to map dictionary data to the target type, which may not survive trimming.")]
+    [RequiresDynamicCode(
+        "TryDecode constructs generic types at runtime, which is not supported with ahead-of-time compilation.")]
     public bool TryDecode<T>(string name, out T value) where T : new()
     {
         if (!_inner.TryGetValue(name, out var raw))

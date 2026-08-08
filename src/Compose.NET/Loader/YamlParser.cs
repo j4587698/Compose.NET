@@ -14,15 +14,19 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Text;
-using YamlDotNet.Serialization;
+using YamlDotNet.Core;
+using YamlDotNet.RepresentationModel;
 
 namespace Compose.NET.Loader
 {
     /// <summary>
     /// Handles raw YAML deserialization and key type conversion.
-    /// Converts YamlDotNet's untyped object tree (Dictionary&lt;object, object&gt;)
-    /// into a normalized Dictionary&lt;string, object?&gt; tree suitable for further processing.
+    /// Parses YAML into a normalized <see cref="Dictionary{TKey,TValue}"/>
+    /// tree using YamlDotNet's representation model, which is fully
+    /// compatible with ahead-of-time compilation and trimming.
     /// </summary>
     internal static class YamlParser
     {
@@ -80,7 +84,8 @@ namespace Compose.NET.Loader
         /// <param name="yamlContent">The raw YAML content string.</param>
         /// <returns>A dictionary representing the parsed YAML document.</returns>
         /// <exception cref="InvalidOperationException">
-        /// Thrown when the top-level YAML value is not a mapping.
+        /// Thrown when the top-level YAML value is not a mapping, or the stream
+        /// contains more than one document.
         /// </exception>
         public static Dictionary<string, object?> ParseYaml(string yamlContent)
         {
@@ -89,22 +94,32 @@ namespace Compose.NET.Loader
                 return new Dictionary<string, object?>();
             }
 
-            var deserializer = new DeserializerBuilder().Build();
-            var raw = deserializer.Deserialize<object>(yamlContent);
+            var yaml = new YamlStream();
+            using (var reader = new StringReader(yamlContent))
+            {
+                yaml.Load(reader);
+            }
 
-            if (raw == null)
+            if (yaml.Documents.Count == 0)
             {
                 // YAML contained only comments or empty documents
                 return new Dictionary<string, object?>();
             }
 
-            if (raw is Dictionary<object, object> dict)
+            if (yaml.Documents.Count > 1)
             {
-                return (Dictionary<string, object?>)ConvertToStringKeys(dict)!;
+                throw new InvalidOperationException(
+                    "Expected a single document in the stream, but found more than one.");
+            }
+
+            var root = yaml.Documents[0].RootNode;
+            if (root is YamlMappingNode mappingRoot)
+            {
+                return ConvertMapping(mappingRoot) ?? new Dictionary<string, object?>();
             }
 
             throw new InvalidOperationException(
-                $"Expected top-level YAML value to be a mapping, but got {raw.GetType().Name}.");
+                $"Expected top-level YAML value to be a mapping, but got {root.GetType().Name}.");
         }
 
         /// <summary>
@@ -120,62 +135,6 @@ namespace Compose.NET.Loader
 
             string yamlContent = StripBom(content);
             return ParseYaml(yamlContent);
-        }
-
-        /// <summary>
-        /// Recursively converts an untyped object tree from YamlDotNet into one
-        /// where all mapping keys are strings.
-        /// <list type="bullet">
-        ///   <item><description><see cref="Dictionary{TKey,TValue}"/> with object keys are converted to string keys.</description></item>
-        ///   <item><description><see cref="List{T}"/> items are converted recursively.</description></item>
-        ///   <item><description>Scalars (string, int, bool, double, null) are left unchanged.</description></item>
-        /// </list>
-        /// </summary>
-        /// <param name="value">The value to convert.</param>
-        /// <returns>The converted value with all mapping keys as strings.</returns>
-        internal static object? ConvertToStringKeys(object? value)
-        {
-            switch (value)
-            {
-                case null:
-                    return null;
-
-                case Dictionary<object, object> objDict:
-                {
-                    var result = new Dictionary<string, object?>(objDict.Count);
-                    foreach (var kvp in objDict)
-                    {
-                        string key = kvp.Key?.ToString() ?? string.Empty;
-                        result[key] = ConvertToStringKeys(kvp.Value);
-                    }
-                    return result;
-                }
-
-                case Dictionary<string, object?> strDict:
-                {
-                    // Already has string keys, but values may need conversion
-                    var result = new Dictionary<string, object?>(strDict.Count);
-                    foreach (var kvp in strDict)
-                    {
-                        result[kvp.Key] = ConvertToStringKeys(kvp.Value);
-                    }
-                    return result;
-                }
-
-                case List<object> list:
-                {
-                    var result = new List<object?>(list.Count);
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        result.Add(ConvertToStringKeys(list[i]));
-                    }
-                    return result;
-                }
-
-                // Scalars: string, int, long, bool, double, etc. â€” pass through
-                default:
-                    return value;
-            }
         }
 
         /// <summary>
@@ -240,6 +199,49 @@ namespace Compose.NET.Loader
         }
 
         /// <summary>
+        /// Converts a YAML scalar node's value to the appropriate .NET type.
+        /// Matches YamlDotNet's Deserializer default behavior: bool, int, long, double, null, or string.
+        /// </summary>
+        internal static object? ConvertScalarValue(YamlScalarNode node)
+        {
+            var value = node.Value;
+
+            // Quoted strings are always strings
+            if (node.Style == ScalarStyle.SingleQuoted ||
+                node.Style == ScalarStyle.DoubleQuoted)
+            {
+                return value;
+            }
+
+            // Plain scalars — try typed parsing
+            if (value == null || value == "~" ||
+                string.Equals(value, "null", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (string.IsNullOrEmpty(value))
+                return null;
+
+            if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (int.TryParse(value, NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out var intVal))
+                return intVal;
+
+            if (long.TryParse(value, NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out var longVal))
+                return longVal;
+
+            if (double.TryParse(value, NumberStyles.Float | NumberStyles.AllowExponent,
+                    CultureInfo.InvariantCulture, out var dblVal))
+                return dblVal;
+
+            return value;
+        }
+
+        /// <summary>
         /// Fixes known list fields within a single service configuration dictionary,
         /// converting null values to empty lists.
         /// </summary>
@@ -251,6 +253,127 @@ namespace Compose.NET.Loader
                 {
                     serviceDict[field] = new List<object?>();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Converts a <see cref="YamlMappingNode"/> to a <see cref="Dictionary{TKey,TValue}"/>
+        /// with string keys throughout the tree.
+        /// </summary>
+        private static Dictionary<string, object?>? ConvertMapping(YamlMappingNode node)
+        {
+            var dict = new Dictionary<string, object?>();
+
+            foreach (var child in node.Children)
+            {
+                string key;
+                if (child.Key is YamlScalarNode keyScalar)
+                {
+                    key = keyScalar.Value ?? string.Empty;
+                }
+                else
+                {
+                    key = child.Key.ToString();
+                }
+
+                // Merge key (<<) — expand the referenced mapping(s) without
+                // overwriting explicitly declared keys.
+                if (key == "<<")
+                {
+                    MergeMappingFromMergeKey(dict, child.Value);
+                    continue;
+                }
+
+                dict[key] = ConvertNode(child.Value);
+            }
+
+            return dict;
+        }
+
+        /// <summary>
+        /// Handles the YAML merge key <c>&lt;&lt;</c>. The value can be:
+        /// <list type="bullet">
+        ///   <item>A single mapping node (alias to an anchor)</item>
+        ///   <item>A sequence of mapping nodes</item>
+        /// </list>
+        /// Merged values are added to the dictionary without overwriting existing keys.
+        /// </summary>
+        private static void MergeMappingFromMergeKey(Dictionary<string, object?> target, YamlNode value)
+        {
+            switch (value)
+            {
+                case YamlMappingNode mappingNode:
+                {
+                    var merged = ConvertMapping(mappingNode);
+                    if (merged != null)
+                    {
+                        foreach (var kvp in merged)
+                        {
+                            if (!target.ContainsKey(kvp.Key))
+                            {
+                                target[kvp.Key] = kvp.Value;
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                case YamlSequenceNode seqNode:
+                {
+                    // Multiple merge sources: process in order, later ones have lower priority
+                    foreach (var item in seqNode.Children)
+                    {
+                        if (item is YamlMappingNode mappingItem)
+                        {
+                            var merged = ConvertMapping(mappingItem);
+                            if (merged != null)
+                            {
+                                foreach (var kvp in merged)
+                                {
+                                    if (!target.ContainsKey(kvp.Key))
+                                    {
+                                        target[kvp.Key] = kvp.Value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Converts a <see cref="YamlSequenceNode"/> to a <see cref="List{T}"/>.
+        /// </summary>
+        private static List<object?> ConvertSequence(YamlSequenceNode node)
+        {
+            var list = new List<object?>(node.Children.Count);
+            for (int i = 0; i < node.Children.Count; i++)
+            {
+                list.Add(ConvertNode(node.Children[i]));
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Dispatches conversion based on the node type.
+        /// </summary>
+        private static object? ConvertNode(YamlNode node)
+        {
+            switch (node)
+            {
+                case YamlMappingNode mapping:
+                    return ConvertMapping(mapping);
+
+                case YamlSequenceNode sequence:
+                    return ConvertSequence(sequence);
+
+                case YamlScalarNode scalar:
+                    return ConvertScalarValue(scalar);
+
+                default:
+                    return null;
             }
         }
 
