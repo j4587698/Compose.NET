@@ -9,7 +9,7 @@
     <AssemblyName>Compose.NET</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>Compose.NET</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>jx</Authors>
     <Description>A .NET implementation of the Compose specification parser, aligned with compose-go. Parses and loads Docker Compose YAML files into strongly-typed models with no Docker dependency.</Description>
     <PackageTags>docker;compose;yaml;parser;compose-spec;docker-compose</PackageTags>
