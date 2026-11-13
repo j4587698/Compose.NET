@@ -36,6 +36,7 @@ It parses and loads Docker Compose files into strongly-typed C# models, without 
 - `net8.0`
 - `net9.0`
 - `net10.0`
+- `net11.0`
 
 ## Installation
 

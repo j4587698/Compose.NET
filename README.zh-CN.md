@@ -36,6 +36,7 @@ Compose.NET 是 [compose-go](https://github.com/compose-spec/compose-go) 的 .NE
 - `net8.0`
 - `net9.0`
 - `net10.0`
+- `net11.0`
 
 ## 安装
 
