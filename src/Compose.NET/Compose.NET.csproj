@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net10.0;net11.0</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -9,7 +9,7 @@
     <AssemblyName>Compose.NET</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>Compose.NET</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>jx</Authors>
     <Description>A .NET implementation of the Compose specification parser, aligned with compose-go. Parses and loads Docker Compose YAML files into strongly-typed models with no Docker dependency.</Description>
     <PackageTags>docker;compose;yaml;parser;compose-spec;docker-compose</PackageTags>
